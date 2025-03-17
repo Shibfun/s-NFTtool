@@ -28,7 +28,8 @@
     <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
     <div class="settings">
         <label>Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
-        <label>Gas Limit: <input type="number" id="gasLimit" value="200000" min="21000"></label>
+        <label>Gas Limit: <input type="number" id="gasLimit" value="300000" min="21000"></label>
+        <label>Merge Interval (seconds): <input type="number" id="mergeInterval" value="5" min="1"></label>
     </div>
     <button onclick="mergeNFTs()">Merge NFTs</button>
     <div id="status">Status: Ready</div>
@@ -81,6 +82,7 @@
 
             const gasPriceGwei = parseFloat(document.getElementById("gasPrice").value);
             const gasLimit = parseInt(document.getElementById("gasLimit").value);
+            const mergeInterval = parseInt(document.getElementById("mergeInterval").value) * 1000;
 
             if (isNaN(gasPriceGwei) || gasPriceGwei <= 0) {
                 status.textContent += "Error: Invalid Gas Price.\n";
@@ -88,6 +90,10 @@
             }
             if (isNaN(gasLimit) || gasLimit < 21000) {
                 status.textContent += "Error: Invalid Gas Limit (minimum 21000).\n";
+                return;
+            }
+            if (isNaN(mergeInterval) || mergeInterval < 1000) {
+                status.textContent += "Error: Invalid Merge Interval (minimum 1 second).\n";
                 return;
             }
 
@@ -124,6 +130,7 @@
                         if (newMass > MAX_MASS) {
                             status.textContent += `Error: Merging ${tokenId1} and ${tokenId2} would exceed MAX_MASS (${MAX_MASS}).\n`;
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
+                            await new Promise(resolve => setTimeout(resolve, mergeInterval));
                             continue;
                         }
 
@@ -133,14 +140,22 @@
                                 gas: gasLimit,
                                 gasPrice: gasPriceWei
                             });
-                            const newTokenId = tx.events?.NewNFTMinted?.returnValues?.tokenId || "Unknown";
-                            status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${newTokenId}\n`;
-
+                            const newTokenId = tx.events?.NewNFTMinted?.returnValues?.tokenId;
+                            if (!newTokenId) {
+                                const latestToken = await contract.methods.tokensOfOwner(account.address).call();
+                                const lastToken = latestToken[latestToken.length - 1];
+                                status.textContent += `New token ID not found in event, using latest: ${lastToken}\n`;
+                                allTokenIds.push({ tokenId: lastToken, owner: account.address });
+                            } else {
+                                status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${newTokenId}\n`;
+                                allTokenIds.push({ tokenId: newTokenId, owner: account.address });
+                            }
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId1 && t.tokenId !== tokenId2);
-                            allTokenIds.push({ tokenId: newTokenId, owner: account.address });
+                            await new Promise(resolve => setTimeout(resolve, mergeInterval));
                         } catch (mergeError) {
                             status.textContent += `Error merging ${tokenId1} and ${tokenId2}: ${mergeError.message}\n`;
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
+                            await new Promise(resolve => setTimeout(resolve, mergeInterval));
                             continue;
                         }
                     }
