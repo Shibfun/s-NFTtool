@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shibarium Serge NFT Merger</title>
+    <title id="title">Shibarium Serge NFT Merger</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         textarea { width: 100%; height: 200px; margin-bottom: 10px; }
@@ -15,27 +15,27 @@
         .settings input { width: 200px; margin-bottom: 10px; }
     </style>
 </head>
-<body>
-    <h1>Shibarium Serge NFT Merger</h1>
+<body onload="updateLanguage()">
+    <h1 id="title">Shibarium Serge NFT Merger</h1>
     <div class="settings">
-        <label>Shibarium RPC URL: <input type="text" id="rpcUrl" value="https://www.shibrpc.com"></label>
-        <label>Chain ID: <input type="text" id="chainId" value="109" readonly></label>
-        <label>Network Name: <input type="text" id="networkName" value="Shibarium" readonly></label>
-        <label>Currency Symbol: <input type="text" id="currencySymbol" value="BONE" readonly></label>
-        <label>Block Explorer: <input type="text" id="blockExplorer" value="https://www.shibariumscan.io" readonly></label>
-        <label>Language: <select id="language">
+        <label id="labelRpcUrl">Shibarium RPC URL: <input type="text" id="rpcUrl" value="https://www.shibrpc.com"></label>
+        <label id="labelChainId">Chain ID: <input type="text" id="chainId" value="109" readonly></label>
+        <label id="labelNetworkName">Network Name: <input type="text" id="networkName" value="Shibarium" readonly></label>
+        <label id="labelCurrencySymbol">Currency Symbol: <input type="text" id="currencySymbol" value="BONE" readonly></label>
+        <label id="labelBlockExplorer">Block Explorer: <input type="text" id="blockExplorer" value="https://www.shibariumscan.io" readonly></label>
+        <label id="labelLanguage">Language: <select id="language" onchange="updateLanguage()">
             <option value="en">English</option>
             <option value="zh">中文</option>
         </select></label>
     </div>
-    <p>Enter one private key per line (with "0x" prefix):</p>
+    <p id="labelPrivateKeys">Enter one private key per line (with "0x" prefix):</p>
     <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
     <div class="settings">
-        <label>Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
-        <label>Gas Limit: <input type="number" id="gasLimit" value="400000" min="21000"></label>
-        <label>Merge Interval (seconds): <input type="number" id="mergeInterval" value="5" min="1"></label>
+        <label id="labelGasPrice">Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
+        <label id="labelGasLimit">Gas Limit: <input type="number" id="gasLimit" value="400000" min="21000"></label>
+        <label id="labelMergeInterval">Merge Interval (seconds): <input type="number" id="mergeInterval" value="5" min="1"></label>
     </div>
-    <button onclick="mergeNFTs()">Merge NFTs</button>
+    <button id="mergeButton" onclick="mergeNFTs()">Merge NFTs</button>
     <div id="status">Status: Ready</div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
@@ -51,7 +51,21 @@
 
         const messages = {
             en: {
+                title: "Shibarium Serge NFT Merger",
+                labelRpcUrl: "Shibarium RPC URL: ",
+                labelChainId: "Chain ID: ",
+                labelNetworkName: "Network Name: ",
+                labelCurrencySymbol: "Currency Symbol: ",
+                labelBlockExplorer: "Block Explorer: ",
+                labelLanguage: "Language: ",
+                labelPrivateKeys: "Enter one private key per line (with \"0x\" prefix):",
+                privateKeysPlaceholder: "e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                labelGasPrice: "Gas Price (Gwei): ",
+                labelGasLimit: "Gas Limit: ",
+                labelMergeInterval: "Merge Interval (seconds): ",
+                mergeButton: "Merge NFTs",
                 statusStarting: "Status: Starting...",
+                statusReady: "Status: Ready",
                 testingRPC: "Testing RPC connection...",
                 connectedToChain: "Connected to chain ID: ",
                 expectedChain: " (Shibarium should be 109)",
@@ -83,7 +97,21 @@
                 generalError: "Error: "
             },
             zh: {
+                title: "Shibarium Serge NFT 合并工具",
+                labelRpcUrl: "Shibarium RPC 地址: ",
+                labelChainId: "链 ID: ",
+                labelNetworkName: "网络名称: ",
+                labelCurrencySymbol: "货币符号: ",
+                labelBlockExplorer: "区块浏览器: ",
+                labelLanguage: "语言: ",
+                labelPrivateKeys: "每行输入一个私钥 (带 \"0x\" 前缀):",
+                privateKeysPlaceholder: "例如:\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                labelGasPrice: "Gas 价格 (Gwei): ",
+                labelGasLimit: "Gas 限制: ",
+                labelMergeInterval: "合并间隔 (秒): ",
+                mergeButton: "合并 NFT",
                 statusStarting: "状态: 正在启动...",
+                statusReady: "状态: 准备就绪",
                 testingRPC: "测试 RPC 连接...",
                 connectedToChain: "已连接到链 ID: ",
                 expectedChain: " (Shibarium 应为 109)",
@@ -119,6 +147,24 @@
         function getMessage(key) {
             const lang = document.getElementById("language").value;
             return messages[lang][key];
+        }
+
+        function updateLanguage() {
+            const lang = document.getElementById("language").value;
+            document.getElementById("title").textContent = getMessage("title");
+            document.getElementById("labelRpcUrl").childNodes[0].textContent = getMessage("labelRpcUrl");
+            document.getElementById("labelChainId").childNodes[0].textContent = getMessage("labelChainId");
+            document.getElementById("labelNetworkName").childNodes[0].textContent = getMessage("labelNetworkName");
+            document.getElementById("labelCurrencySymbol").childNodes[0].textContent = getMessage("labelCurrencySymbol");
+            document.getElementById("labelBlockExplorer").childNodes[0].textContent = getMessage("labelBlockExplorer");
+            document.getElementById("labelLanguage").childNodes[0].textContent = getMessage("labelLanguage");
+            document.getElementById("labelPrivateKeys").textContent = getMessage("labelPrivateKeys");
+            document.getElementById("privateKeys").placeholder = getMessage("privateKeysPlaceholder");
+            document.getElementById("labelGasPrice").childNodes[0].textContent = getMessage("labelGasPrice");
+            document.getElementById("labelGasLimit").childNodes[0].textContent = getMessage("labelGasLimit");
+            document.getElementById("labelMergeInterval").childNodes[0].textContent = getMessage("labelMergeInterval");
+            document.getElementById("mergeButton").textContent = getMessage("mergeButton");
+            document.getElementById("status").textContent = getMessage("statusReady");
         }
 
         async function mergeNFTs() {
