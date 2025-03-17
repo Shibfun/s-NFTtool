@@ -10,12 +10,19 @@
         button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #45a049; }
         #status { margin-top: 10px; white-space: pre-wrap; }
+        .gas-settings { margin: 10px 0; }
+        .gas-settings label { display: block; margin-bottom: 5px; }
+        .gas-settings input { width: 100px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <h1>Shibarium Serge NFT Merger</h1>
     <p>Enter one private key per line (with "0x" prefix):</p>
     <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
+    <div class="gas-settings">
+        <label>Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
+        <label>Gas Limit: <input type="number" id="gasLimit" value="200000" min="21000"></label>
+    </div>
     <button onclick="mergeNFTs()">Merge NFTs</button>
     <div id="status">Status: Ready</div>
 
@@ -41,6 +48,20 @@
                 status.textContent += "Error: No private keys provided.\n";
                 return;
             }
+
+            const gasPriceGwei = parseFloat(document.getElementById("gasPrice").value);
+            const gasLimit = parseInt(document.getElementById("gasLimit").value);
+
+            if (isNaN(gasPriceGwei) || gasPriceGwei <= 0) {
+                status.textContent += "Error: Invalid Gas Price.\n";
+                return;
+            }
+            if (isNaN(gasLimit) || gasLimit < 21000) {
+                status.textContent += "Error: Invalid Gas Limit (minimum 21000).\n";
+                return;
+            }
+
+            const gasPriceWei = web3.utils.toWei(gasPriceGwei.toString(), "gwei");
 
             try {
                 const walletPromises = privateKeys.map(async pk => {
@@ -88,7 +109,11 @@
                     const tokenId2 = tokensToMerge[1];
                     status.textContent += `Merging ${tokenId1} and ${tokenId2} from ${mergeOwner}...\n`;
 
-                    const tx = await contract.methods.merge(tokenId1, tokenId2).send({ from: mergeOwner });
+                    const tx = await contract.methods.merge(tokenId1, tokenId2).send({
+                        from: mergeOwner,
+                        gas: gasLimit,
+                        gasPrice: gasPriceWei
+                    });
                     status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${tx.events.NewNFTMinted.returnValues.tokenId}\n`;
 
                     allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId1 && t.tokenId !== tokenId2);
