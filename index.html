@@ -14,8 +14,8 @@
 </head>
 <body>
     <h1>Shibarium Serge NFT Merger</h1>
-    <p>Enter one private key per line (without "0x" prefix):</p>
-    <textarea id="privateKeys" placeholder="e.g.\n1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\nabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
+    <p>Enter one private key per line (with "0x" prefix):</p>
+    <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
     <button onclick="mergeNFTs()">Merge NFTs</button>
     <div id="status">Status: Ready</div>
 
@@ -44,7 +44,7 @@
 
             try {
                 const walletPromises = privateKeys.map(async pk => {
-                    const account = web3.eth.accounts.privateKeyToAccount("0x" + pk.trim());
+                    const account = web3.eth.accounts.privateKeyToAccount(pk.trim());
                     web3.eth.accounts.wallet.add(account);
                     const tokens = await contract.methods.tokensOfOwner(account.address).call();
                     return { address: account.address, tokens };
