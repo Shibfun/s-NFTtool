@@ -23,12 +23,16 @@
         <label>Network Name: <input type="text" id="networkName" value="Shibarium" readonly></label>
         <label>Currency Symbol: <input type="text" id="currencySymbol" value="BONE" readonly></label>
         <label>Block Explorer: <input type="text" id="blockExplorer" value="https://www.shibariumscan.io" readonly></label>
+        <label>Language: <select id="language">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+        </select></label>
     </div>
     <p>Enter one private key per line (with "0x" prefix):</p>
     <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
     <div class="settings">
         <label>Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
-        <label>Gas Limit: <input type="number" id="gasLimit" value="300000" min="21000"></label>
+        <label>Gas Limit: <input type="number" id="gasLimit" value="400000" min="21000"></label>
         <label>Merge Interval (seconds): <input type="number" id="mergeInterval" value="5" min="1"></label>
     </div>
     <button onclick="mergeNFTs()">Merge NFTs</button>
@@ -45,16 +49,88 @@
             {"constant": true, "inputs": [{"name": "owner_", "type": "address"}], "name": "tokensOfOwner", "outputs": [{"name": "", "type": "uint256[]"}], "type": "function"}
         ];
 
+        const messages = {
+            en: {
+                statusStarting: "Status: Starting...",
+                testingRPC: "Testing RPC connection...",
+                connectedToChain: "Connected to chain ID: ",
+                expectedChain: " (Shibarium should be 109)",
+                chainMismatch: "Error: Not connected to Shibarium network (chain ID should be 109).",
+                rpcError: "Error: Failed to connect to RPC: ",
+                noPrivateKeys: "Error: No private keys provided.",
+                invalidGasPrice: "Error: Invalid Gas Price.",
+                invalidGasLimit: "Error: Invalid Gas Limit (minimum 21000).",
+                invalidInterval: "Error: Invalid Merge Interval (minimum 1 second).",
+                processingWallet: "Processing wallet ",
+                withNFTs: " with ",
+                lowBalanceWarning: "Warning: Wallet ",
+                hasLowBalance: " has low BONE balance (",
+                mayNotCoverGas: "), may not cover Gas fees.",
+                lessThanTwoNFTs: " has less than 2 NFTs, skipping merge.",
+                merging: "Merging ",
+                and: " and ",
+                from: " from ",
+                massExceeds: "Error: Merging ",
+                wouldExceedMaxMass: " would exceed MAX_MASS (",
+                mergeSuccessful: "Merge successful! Tx: ",
+                newTokenID: "New token ID: ",
+                newTokenNotFound: "New token ID not found in event, using latest: ",
+                mergeError: "Error merging ",
+                errorMessage: ": ",
+                finalNFT: "Final NFT for ",
+                viewOnExplorer: "View on Shibariumscan: ",
+                allProcessed: "All wallets processed. Done!",
+                generalError: "Error: "
+            },
+            zh: {
+                statusStarting: "状态: 正在启动...",
+                testingRPC: "测试 RPC 连接...",
+                connectedToChain: "已连接到链 ID: ",
+                expectedChain: " (Shibarium 应为 109)",
+                chainMismatch: "错误: 未连接到 Shibarium 网络 (链 ID 应为 109)。",
+                rpcError: "错误: 无法连接到 RPC: ",
+                noPrivateKeys: "错误: 未提供私钥。",
+                invalidGasPrice: "错误: 无效的 Gas 价格。",
+                invalidGasLimit: "错误: 无效的 Gas 限制 (最小 21000)。",
+                invalidInterval: "错误: 无效的合并间隔 (最小 1 秒)。",
+                processingWallet: "正在处理钱包 ",
+                withNFTs: " 包含 ",
+                lowBalanceWarning: "警告: 钱包 ",
+                hasLowBalance: " 的 BONE 余额低 (",
+                mayNotCoverGas: ")，可能无法支付 Gas 费用。",
+                lessThanTwoNFTs: " 少于 2 个 NFT，跳过合并。",
+                merging: "合并 ",
+                and: " 和 ",
+                from: " 来自 ",
+                massExceeds: "错误: 合并 ",
+                wouldExceedMaxMass: " 将超过 MAX_MASS (",
+                mergeSuccessful: "合并成功! 交易: ",
+                newTokenID: "新 token ID: ",
+                newTokenNotFound: "未在事件中找到新 token ID，使用最新: ",
+                mergeError: "合并错误 ",
+                errorMessage: ": ",
+                finalNFT: "该钱包 ",
+                viewOnExplorer: "在 Shibariumscan 上查看: ",
+                allProcessed: "所有钱包处理完成。完成!",
+                generalError: "错误: "
+            }
+        };
+
+        function getMessage(key) {
+            const lang = document.getElementById("language").value;
+            return messages[lang][key];
+        }
+
         async function mergeNFTs() {
             const status = document.getElementById("status");
-            status.textContent = "Status: Starting...\n";
+            status.textContent = getMessage("statusStarting") + "\n";
 
             const rpcUrl = document.getElementById("rpcUrl").value.trim();
             const chainId = parseInt(document.getElementById("chainId").value);
             const expectedChainId = 109;
 
             if (!rpcUrl) {
-                status.textContent += "Error: Please provide a valid Shibarium RPC URL.\n";
+                status.textContent += getMessage("rpcError") + "Please provide a valid Shibarium RPC URL.\n";
                 return;
             }
 
@@ -62,21 +138,21 @@
             const contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
 
             try {
-                status.textContent += "Testing RPC connection...\n";
+                status.textContent += getMessage("testingRPC") + "\n";
                 const networkChainId = await web3.eth.getChainId();
-                status.textContent += `Connected to chain ID: ${networkChainId} (Shibarium should be ${expectedChainId})\n`;
+                status.textContent += getMessage("connectedToChain") + networkChainId + getMessage("expectedChain") + "\n";
                 if (networkChainId !== expectedChainId) {
-                    status.textContent += `Error: Not connected to Shibarium network (chain ID should be ${expectedChainId}).\n`;
+                    status.textContent += getMessage("chainMismatch") + "\n";
                     return;
                 }
             } catch (error) {
-                status.textContent += `Error: Failed to connect to RPC: ${error.message}\n`;
+                status.textContent += getMessage("rpcError") + error.message + "\n";
                 return;
             }
 
             const privateKeys = document.getElementById("privateKeys").value.trim().split("\n").filter(key => key.length > 0);
             if (privateKeys.length < 1) {
-                status.textContent += "Error: No private keys provided.\n";
+                status.textContent += getMessage("noPrivateKeys") + "\n";
                 return;
             }
 
@@ -85,15 +161,15 @@
             const mergeInterval = parseInt(document.getElementById("mergeInterval").value) * 1000;
 
             if (isNaN(gasPriceGwei) || gasPriceGwei <= 0) {
-                status.textContent += "Error: Invalid Gas Price.\n";
+                status.textContent += getMessage("invalidGasPrice") + "\n";
                 return;
             }
             if (isNaN(gasLimit) || gasLimit < 21000) {
-                status.textContent += "Error: Invalid Gas Limit (minimum 21000).\n";
+                status.textContent += getMessage("invalidGasLimit") + "\n";
                 return;
             }
             if (isNaN(mergeInterval) || mergeInterval < 1000) {
-                status.textContent += "Error: Invalid Merge Interval (minimum 1 second).\n";
+                status.textContent += getMessage("invalidInterval") + "\n";
                 return;
             }
 
@@ -105,15 +181,15 @@
                     web3.eth.accounts.wallet.add(account);
                     const balance = await web3.eth.getBalance(account.address);
                     const balanceInBONE = web3.utils.fromWei(balance, "ether");
-                    const tokens = await contract.methods.tokensOfOwner(account.address).call();
-                    status.textContent += `Processing wallet ${account.address} with ${tokens.length} NFTs\n`;
+                    let tokens = await contract.methods.tokensOfOwner(account.address).call();
+                    status.textContent += getMessage("processingWallet") + account.address + getMessage("withNFTs") + tokens.length + " NFTs\n";
                     if (balanceInBONE < 0.01) {
-                        status.textContent += `Warning: Wallet ${account.address} has low BONE balance (${balanceInBONE}), may not cover Gas fees.\n`;
+                        status.textContent += getMessage("lowBalanceWarning") + account.address + getMessage("hasLowBalance") + balanceInBONE + getMessage("mayNotCoverGas") + "\n";
                     }
 
                     let allTokenIds = tokens.map(t => ({ tokenId: t, owner: account.address }));
                     if (allTokenIds.length < 2) {
-                        status.textContent += `Wallet ${account.address} has less than 2 NFTs, skipping merge.\n`;
+                        status.textContent += account.address + getMessage("lessThanTwoNFTs") + "\n";
                         continue;
                     }
 
@@ -122,13 +198,13 @@
                         const tokenId1 = shuffled[0].tokenId;
                         const tokenId2 = shuffled[1].tokenId;
 
-                        status.textContent += `Merging ${tokenId1} and ${tokenId2} from ${account.address}...\n`;
+                        status.textContent += getMessage("merging") + tokenId1 + getMessage("and") + tokenId2 + getMessage("from") + account.address + "...\n";
 
                         const mass1 = await contract.methods.massOf(tokenId1).call();
                         const mass2 = await contract.methods.massOf(tokenId2).call();
                         const newMass = parseInt(mass1) + parseInt(mass2);
                         if (newMass > MAX_MASS) {
-                            status.textContent += `Error: Merging ${tokenId1} and ${tokenId2} would exceed MAX_MASS (${MAX_MASS}).\n`;
+                            status.textContent += getMessage("massExceeds") + tokenId1 + getMessage("and") + tokenId2 + getMessage("wouldExceedMaxMass") + MAX_MASS + ").\n";
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
                             await new Promise(resolve => setTimeout(resolve, mergeInterval));
                             continue;
@@ -140,20 +216,19 @@
                                 gas: gasLimit,
                                 gasPrice: gasPriceWei
                             });
-                            const newTokenId = tx.events?.NewNFTMinted?.returnValues?.tokenId;
+                            let newTokenId = tx.events?.NewNFTMinted?.returnValues?.tokenId;
                             if (!newTokenId) {
-                                const latestToken = await contract.methods.tokensOfOwner(account.address).call();
-                                const lastToken = latestToken[latestToken.length - 1];
-                                status.textContent += `New token ID not found in event, using latest: ${lastToken}\n`;
-                                allTokenIds.push({ tokenId: lastToken, owner: account.address });
+                                const latestTokens = await contract.methods.tokensOfOwner(account.address).call();
+                                newTokenId = latestTokens[latestTokens.length - 1];
+                                status.textContent += getMessage("newTokenNotFound") + newTokenId + "\n";
                             } else {
-                                status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${newTokenId}\n`;
-                                allTokenIds.push({ tokenId: newTokenId, owner: account.address });
+                                status.textContent += getMessage("mergeSuccessful") + tx.transactionHash + "\n" + getMessage("newTokenID") + newTokenId + "\n";
                             }
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId1 && t.tokenId !== tokenId2);
+                            allTokenIds.push({ tokenId: newTokenId, owner: account.address });
                             await new Promise(resolve => setTimeout(resolve, mergeInterval));
                         } catch (mergeError) {
-                            status.textContent += `Error merging ${tokenId1} and ${tokenId2}: ${mergeError.message}\n`;
+                            status.textContent += getMessage("mergeError") + tokenId1 + getMessage("and") + tokenId2 + getMessage("errorMessage") + mergeError.message + "\n";
                             allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
                             await new Promise(resolve => setTimeout(resolve, mergeInterval));
                             continue;
@@ -161,12 +236,12 @@
                     }
 
                     const blockExplorer = document.getElementById("blockExplorer").value;
-                    status.textContent += `Final NFT for ${account.address}: ${allTokenIds[0].tokenId}\n`;
-                    status.textContent += `View on Shibariumscan: ${blockExplorer}/token/${CONTRACT_ADDRESS}/instance/${allTokenIds[0].tokenId}\n`;
+                    status.textContent += getMessage("finalNFT") + account.address + ": " + allTokenIds[0].tokenId + "\n";
+                    status.textContent += getMessage("viewOnExplorer") + blockExplorer + "/token/" + CONTRACT_ADDRESS + "/instance/" + allTokenIds[0].tokenId + "\n";
                 }
-                status.textContent += "All wallets processed. Done!\n";
+                status.textContent += getMessage("allProcessed") + "\n";
             } catch (error) {
-                status.textContent += `Error: ${error.message}\n`;
+                status.textContent += getMessage("generalError") + error.message + "\n";
             }
         }
     </script>
