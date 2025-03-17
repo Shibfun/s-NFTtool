@@ -10,16 +10,23 @@
         button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #45a049; }
         #status { margin-top: 10px; white-space: pre-wrap; }
-        .gas-settings { margin: 10px 0; }
-        .gas-settings label { display: block; margin-bottom: 5px; }
-        .gas-settings input { width: 100px; margin-bottom: 10px; }
+        .settings { margin: 10px 0; }
+        .settings label { display: block; margin-bottom: 5px; }
+        .settings input { width: 200px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <h1>Shibarium Serge NFT Merger</h1>
+    <div class="settings">
+        <label>Shibarium RPC URL: <input type="text" id="rpcUrl" value="https://www.shibrpc.com"></label>
+        <label>Chain ID: <input type="text" id="chainId" value="109" readonly></label>
+        <label>Network Name: <input type="text" id="networkName" value="Shibarium" readonly></label>
+        <label>Currency Symbol: <input type="text" id="currencySymbol" value="BONE" readonly></label>
+        <label>Block Explorer: <input type="text" id="blockExplorer" value="https://www.shibariumscan.io" readonly></label>
+    </div>
     <p>Enter one private key per line (with "0x" prefix):</p>
     <textarea id="privateKeys" placeholder="e.g.\n0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\n0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"></textarea>
-    <div class="gas-settings">
+    <div class="settings">
         <label>Gas Price (Gwei): <input type="number" id="gasPrice" value="3.2" step="0.1" min="0"></label>
         <label>Gas Limit: <input type="number" id="gasLimit" value="200000" min="21000"></label>
     </div>
@@ -28,7 +35,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
     <script>
-        const SHIBARIUM_RPC = "https://rpc.shibarium.io";
         const CONTRACT_ADDRESS = "0x9FcEa3627746aEA84c8Eba612E1fD25aC27d605A";
 
         const CONTRACT_ABI = [
@@ -36,12 +42,34 @@
             {"constant": true, "inputs": [{"name": "owner_", "type": "address"}], "name": "tokensOfOwner", "outputs": [{"name": "", "type": "uint256[]"}], "type": "function"}
         ];
 
-        const web3 = new Web3(new Web3.providers.HttpProvider(SHIBARIUM_RPC));
-        const contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-
         async function mergeNFTs() {
             const status = document.getElementById("status");
             status.textContent = "Status: Starting...\n";
+
+            const rpcUrl = document.getElementById("rpcUrl").value.trim();
+            const chainId = parseInt(document.getElementById("chainId").value);
+            const expectedChainId = 109;
+
+            if (!rpcUrl) {
+                status.textContent += "Error: Please provide a valid Shibarium RPC URL.\n";
+                return;
+            }
+
+            const web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl));
+            const contract = new web3.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+
+            try {
+                status.textContent += "Testing RPC connection...\n";
+                const networkChainId = await web3.eth.getChainId();
+                status.textContent += `Connected to chain ID: ${networkChainId} (Shibarium should be ${expectedChainId})\n`;
+                if (networkChainId !== expectedChainId) {
+                    status.textContent += `Error: Not connected to Shibarium network (chain ID should be ${expectedChainId}).\n`;
+                    return;
+                }
+            } catch (error) {
+                status.textContent += `Error: Failed to connect to RPC: ${error.message}\n`;
+                return;
+            }
 
             const privateKeys = document.getElementById("privateKeys").value.trim().split("\n").filter(key => key.length > 0);
             if (privateKeys.length < 1) {
@@ -67,14 +95,20 @@
                 const walletPromises = privateKeys.map(async pk => {
                     const account = web3.eth.accounts.privateKeyToAccount(pk.trim());
                     web3.eth.accounts.wallet.add(account);
+                    const balance = await web3.eth.getBalance(account.address);
+                    const balanceInBONE = web3.utils.fromWei(balance, "ether");
+                    status.textContent += `Wallet ${account.address} has ${balanceInBONE} BONE\n`;
                     const tokens = await contract.methods.tokensOfOwner(account.address).call();
-                    return { address: account.address, tokens };
+                    return { address: account.address, tokens, balance: parseFloat(balanceInBONE) };
                 });
 
                 const wallets = await Promise.all(walletPromises);
                 let allTokenIds = [];
                 wallets.forEach(w => {
                     status.textContent += `Wallet ${w.address} has ${w.tokens.length} NFTs: ${w.tokens.join(", ")}\n`;
+                    if (w.balance < 0.01) {
+                        status.textContent += `Warning: Wallet ${w.address} has low BONE balance (${w.balance}), may not cover Gas fees.\n`;
+                    }
                     allTokenIds.push(...w.tokens.map(t => ({ tokenId: t, owner: w.address })));
                 });
 
@@ -123,7 +157,9 @@
                     });
                 }
 
-                status.textContent += `Final NFT: ${allTokenIds[0].tokenId} owned by ${allTokenIds[0].owner}\nDone!\n`;
+                const blockExplorer = document.getElementById("blockExplorer").value;
+                status.textContent += `Final NFT: ${allTokenIds[0].tokenId} owned by ${allTokenIds[0].owner}\n`;
+                status.textContent += `View on Shibariumscan: ${blockExplorer}/token/${CONTRACT_ADDRESS}/instance/${allTokenIds[0].tokenId}\nDone!\n`;
             } catch (error) {
                 status.textContent += `Error: ${error.message}\n`;
             }
