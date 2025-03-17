@@ -36,9 +36,11 @@
     <script src="https://cdn.jsdelivr.net/npm/web3@1.7.4/dist/web3.min.js"></script>
     <script>
         const CONTRACT_ADDRESS = "0x9FcEa3627746aEA84c8Eba612E1fD25aC27d605A";
+        const MAX_MASS = 100000;
 
         const CONTRACT_ABI = [
             {"constant": false, "inputs": [{"name": "tokenId1", "type": "uint256"}, {"name": "tokenId2", "type": "uint256"}], "name": "merge", "outputs": [], "type": "function"},
+            {"constant": true, "inputs": [{"name": "tokenId", "type": "uint256"}], "name": "massOf", "outputs": [{"name": "", "type": "uint256"}], "type": "function"},
             {"constant": true, "inputs": [{"name": "owner_", "type": "address"}], "name": "tokensOfOwner", "outputs": [{"name": "", "type": "uint256[]"}], "type": "function"}
         ];
 
@@ -92,74 +94,62 @@
             const gasPriceWei = web3.utils.toWei(gasPriceGwei.toString(), "gwei");
 
             try {
-                const walletPromises = privateKeys.map(async pk => {
+                for (const pk of privateKeys) {
                     const account = web3.eth.accounts.privateKeyToAccount(pk.trim());
                     web3.eth.accounts.wallet.add(account);
                     const balance = await web3.eth.getBalance(account.address);
                     const balanceInBONE = web3.utils.fromWei(balance, "ether");
-                    status.textContent += `Wallet ${account.address} has ${balanceInBONE} BONE\n`;
                     const tokens = await contract.methods.tokensOfOwner(account.address).call();
-                    return { address: account.address, tokens, balance: parseFloat(balanceInBONE) };
-                });
-
-                const wallets = await Promise.all(walletPromises);
-                let allTokenIds = [];
-                wallets.forEach(w => {
-                    status.textContent += `Wallet ${w.address} has ${w.tokens.length} NFTs: ${w.tokens.join(", ")}\n`;
-                    if (w.balance < 0.01) {
-                        status.textContent += `Warning: Wallet ${w.address} has low BONE balance (${w.balance}), may not cover Gas fees.\n`;
+                    status.textContent += `Processing wallet ${account.address} with ${tokens.length} NFTs\n`;
+                    if (balanceInBONE < 0.01) {
+                        status.textContent += `Warning: Wallet ${account.address} has low BONE balance (${balanceInBONE}), may not cover Gas fees.\n`;
                     }
-                    allTokenIds.push(...w.tokens.map(t => ({ tokenId: t, owner: w.address })));
-                });
 
-                if (allTokenIds.length < 2) {
-                    status.textContent += "Error: Need at least 2 NFTs to merge.\n";
-                    return;
-                }
+                    let allTokenIds = tokens.map(t => ({ tokenId: t, owner: account.address }));
+                    if (allTokenIds.length < 2) {
+                        status.textContent += `Wallet ${account.address} has less than 2 NFTs, skipping merge.\n`;
+                        continue;
+                    }
 
-                while (allTokenIds.length > 1) {
-                    const tokensByOwner = {};
-                    allTokenIds.forEach(token => {
-                        if (!tokensByOwner[token.owner]) tokensByOwner[token.owner] = [];
-                        tokensByOwner[token.owner].push(token.tokenId);
-                    });
+                    while (allTokenIds.length > 1) {
+                        const shuffled = allTokenIds.sort(() => Math.random() - 0.5);
+                        const tokenId1 = shuffled[0].tokenId;
+                        const tokenId2 = shuffled[1].tokenId;
 
-                    let mergeOwner = null;
-                    let tokensToMerge = [];
-                    for (const [owner, tokens] of Object.entries(tokensByOwner)) {
-                        if (tokens.length >= 2) {
-                            mergeOwner = owner;
-                            tokensToMerge = tokens;
-                            break;
+                        status.textContent += `Merging ${tokenId1} and ${tokenId2} from ${account.address}...\n`;
+
+                        const mass1 = await contract.methods.massOf(tokenId1).call();
+                        const mass2 = await contract.methods.massOf(tokenId2).call();
+                        const newMass = parseInt(mass1) + parseInt(mass2);
+                        if (newMass > MAX_MASS) {
+                            status.textContent += `Error: Merging ${tokenId1} and ${tokenId2} would exceed MAX_MASS (${MAX_MASS}).\n`;
+                            allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
+                            continue;
+                        }
+
+                        try {
+                            const tx = await contract.methods.merge(tokenId1, tokenId2).send({
+                                from: account.address,
+                                gas: gasLimit,
+                                gasPrice: gasPriceWei
+                            });
+                            const newTokenId = tx.events?.NewNFTMinted?.returnValues?.tokenId || "Unknown";
+                            status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${newTokenId}\n`;
+
+                            allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId1 && t.tokenId !== tokenId2);
+                            allTokenIds.push({ tokenId: newTokenId, owner: account.address });
+                        } catch (mergeError) {
+                            status.textContent += `Error merging ${tokenId1} and ${tokenId2}: ${mergeError.message}\n`;
+                            allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId2);
+                            continue;
                         }
                     }
 
-                    if (!mergeOwner) {
-                        status.textContent += "Error: No single wallet has 2+ NFTs to merge.\n";
-                        return;
-                    }
-
-                    const tokenId1 = tokensToMerge[0];
-                    const tokenId2 = tokensToMerge[1];
-                    status.textContent += `Merging ${tokenId1} and ${tokenId2} from ${mergeOwner}...\n`;
-
-                    const tx = await contract.methods.merge(tokenId1, tokenId2).send({
-                        from: mergeOwner,
-                        gas: gasLimit,
-                        gasPrice: gasPriceWei
-                    });
-                    status.textContent += `Merge successful! Tx: ${tx.transactionHash}\nNew token ID: ${tx.events.NewNFTMinted.returnValues.tokenId}\n`;
-
-                    allTokenIds = allTokenIds.filter(t => t.tokenId !== tokenId1 && t.tokenId !== tokenId2);
-                    allTokenIds.push({
-                        tokenId: tx.events.NewNFTMinted.returnValues.tokenId,
-                        owner: mergeOwner
-                    });
+                    const blockExplorer = document.getElementById("blockExplorer").value;
+                    status.textContent += `Final NFT for ${account.address}: ${allTokenIds[0].tokenId}\n`;
+                    status.textContent += `View on Shibariumscan: ${blockExplorer}/token/${CONTRACT_ADDRESS}/instance/${allTokenIds[0].tokenId}\n`;
                 }
-
-                const blockExplorer = document.getElementById("blockExplorer").value;
-                status.textContent += `Final NFT: ${allTokenIds[0].tokenId} owned by ${allTokenIds[0].owner}\n`;
-                status.textContent += `View on Shibariumscan: ${blockExplorer}/token/${CONTRACT_ADDRESS}/instance/${allTokenIds[0].tokenId}\nDone!\n`;
+                status.textContent += "All wallets processed. Done!\n";
             } catch (error) {
                 status.textContent += `Error: ${error.message}\n`;
             }
